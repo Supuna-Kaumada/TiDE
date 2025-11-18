@@ -33,7 +33,7 @@ def main(args):
         num_past_covariates=test_covariates.shape[-1],
         num_future_covariates=X_future_test.shape[-1]
     )
-    model.load_state_dict(torch.load(args.model_path))
+    model.load_state_dict(torch.load(f'tide_model_{args.dataset}.pth'))
     model.eval()
 
     # Evaluation
@@ -64,7 +64,6 @@ if __name__ == '__main__':
     parser.add_argument('--temporal_decoder_hidden', type=int, default=64)
     parser.add_argument('--dropout_rate', type=float, default=0.1)
     parser.add_argument('--use_layer_norm', action='store_true')
-    parser.add_argument('--model_path', type=str, default='tide_model.pth')
 
     args = parser.parse_args()
     main(args)

@@ -40,14 +40,14 @@ To train the TiDE model, run the `train.py` script with your desired dataset and
 python train.py --dataset etth1 --num_epochs 20 --learning_rate 0.0005
 ```
 
-This will train the model on the ETTh1 dataset and save the trained model to `tide_model.pth`. For a full list of configurable hyperparameters and available datasets, see the `argparse` section in `train.py` and the `DATA_DICT` in `tide/data.py`.
+This will train the model on the ETTh1 dataset and save the trained model to `tide_model_etth1.pth`. For a full list of configurable hyperparameters and available datasets, see the `argparse` section in `train.py` and the `DATA_DICT` in `tide/data.py`.
 
 ## Evaluation
 
-To evaluate the trained model, run the `evaluate.py` script:
+To evaluate the trained model, run the `evaluate.py` script, specifying the dataset:
 
 ```bash
-python evaluate.py
+python evaluate.py --dataset etth1
 ```
 
 This will load the trained model and evaluate its performance on the test set, printing the MSE and MAE.

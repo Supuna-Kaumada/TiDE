@@ -166,8 +166,7 @@ class TiDE(nn.Module):
         self.decoder_output_dim = decoder_output_dim
 
         self.encoder = DenseEncoder(
-            input_dim=lookback_len + num_past_covariates * lookback_len +
-            num_time_features,
+            input_dim=lookback_len * (1 + num_past_covariates + num_time_features),
             hidden_dim=hidden_dim,
             output_dim=hidden_dim,
             num_layers=num_encoder_layers,

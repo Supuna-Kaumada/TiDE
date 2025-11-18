@@ -76,7 +76,7 @@ def main(args):
             if val_loss < best_val_loss - args.early_stopping_delta:
                 best_val_loss = val_loss
                 patience_counter = 0
-                torch.save(model.state_dict(), 'tide_model.pth')
+                torch.save(model.state_dict(), f'tide_model_{args.dataset}.pth')
             else:
                 patience_counter += 1
                 if patience_counter >= args.early_stopping_patience:
