@@ -1,68 +1,106 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from tide.data import load_ett_data, create_sliding_window
+from torch.optim.lr_scheduler import CosineAnnealingLR
+from tide.data import load_dataset, create_sliding_window
 from tide.model import TiDE
-import numpy as np
+import argparse
 
-# Hyperparameters
-zip_file_path = 'datasets.zip'
-file_name = 'datasets/ETT-small/ETTh1.csv'
-look_back = 96
-horizon = 96
-num_encoder_layers = 2
-num_decoder_layers = 2
-hidden_dim = 128
-decoder_output_dim = 16
-temporal_decoder_hidden = 64
-dropout_level = 0.1
-learning_rate = 0.001
-num_epochs = 10
-batch_size = 32
+def main(args):
+    # Load and prepare data
+    (
+        train_target, val_target, test_target,
+        train_covariates, val_covariates, test_covariates,
+        train_time, val_time, test_time,
+        scaler
+    ) = load_dataset(args.dataset, target_column='OT' if 'ETT' in args.dataset else 'target')
 
-# Load and prepare data
-train_data, test_data, scaler = load_ett_data(zip_file_path, file_name)
-X_train, y_train = create_sliding_window(train_data, look_back, horizon)
-X_test, y_test = create_sliding_window(test_data, look_back, horizon)
+    X_past_train, X_future_train, y_train = create_sliding_window(
+        train_target, train_covariates, train_time, args.look_back, args.horizon
+    )
+    X_past_val, X_future_val, y_val = create_sliding_window(
+        val_target, val_covariates, val_time, args.look_back, args.horizon
+    )
 
-# Reshape data for channel-independent processing
-num_features = X_train.shape[2]
-X_train = X_train.permute(0, 2, 1).reshape(-1, look_back)
-y_train = y_train.permute(0, 2, 1).reshape(-1, horizon)
+    # Instantiate model, loss function, and optimizer
+    model = TiDE(
+        lookback_len=args.look_back,
+        horizon=args.horizon,
+        num_encoder_layers=args.num_encoder_layers,
+        num_decoder_layers=args.num_decoder_layers,
+        hidden_dim=args.hidden_dim,
+        decoder_output_dim=args.decoder_output_dim,
+        temporal_decoder_hidden=args.temporal_decoder_hidden,
+        num_temporal_decoder_layers=args.num_temporal_decoder_layers,
+        dropout_rate=args.dropout_rate,
+        use_layer_norm=args.use_layer_norm,
+        num_time_features=X_past_train.shape[-1] - train_covariates.shape[-1] - 1, # time features
+        num_past_covariates=train_covariates.shape[-1],
+        num_future_covariates=X_future_train.shape[-1]
+    )
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
+    scheduler = CosineAnnealingLR(optimizer, T_max=args.num_epochs)
 
-X_test = X_test.permute(0, 2, 1).reshape(-1, look_back)
-y_test = y_test.permute(0, 2, 1).reshape(-1, horizon)
+    # Early stopping
+    best_val_loss = float('inf')
+    patience_counter = 0
 
+    # Training loop
+    for epoch in range(args.num_epochs):
+        for i in range(0, len(X_past_train), args.batch_size):
+            # Get batch
+            X_past_batch = X_past_train[i:i+args.batch_size]
+            X_future_batch = X_future_train[i:i+args.batch_size]
+            y_batch = y_train[i:i+args.batch_size]
 
-# Instantiate model, loss function, and optimizer
-model = TiDE(look_back, horizon, num_encoder_layers, num_decoder_layers, hidden_dim, decoder_output_dim, temporal_decoder_hidden, dropout_level)
-criterion = nn.MSELoss()
-optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+            # Forward pass
+            outputs = model(X_past_batch, X_future_batch)
+            loss = criterion(outputs, y_batch)
 
-# Training loop
-for epoch in range(num_epochs):
-    for i in range(0, len(X_train), batch_size):
-        # Get batch
-        X_batch = X_train[i:i+batch_size]
-        y_batch = y_train[i:i+batch_size]
+            # Backward and optimize
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-        # Forward pass
-        outputs = model(X_batch)
-        loss = criterion(outputs, y_batch)
+        scheduler.step()
+        print(f'Epoch [{epoch+1}/{args.num_epochs}], Loss: {loss.item():.4f}')
 
-        # Backward and optimize
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        # Validation
+        with torch.no_grad():
+            val_outputs = model(X_past_val, X_future_val)
+            val_loss = criterion(val_outputs, y_val)
+            print(f'Validation Loss: {val_loss.item():.4f}')
 
-    # Print loss for every epoch
-    print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
+            # Early stopping check
+            if val_loss < best_val_loss - args.early_stopping_delta:
+                best_val_loss = val_loss
+                patience_counter = 0
+                torch.save(model.state_dict(), f'tide_model_{args.dataset}.pth')
+            else:
+                patience_counter += 1
+                if patience_counter >= args.early_stopping_patience:
+                    print("Early stopping triggered")
+                    break
 
-    # Validation
-    with torch.no_grad():
-        val_outputs = model(X_test)
-        val_loss = criterion(val_outputs, y_test)
-        print(f'Validation Loss: {val_loss.item():.4f}')
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='TiDE Training Script')
+    parser.add_argument('--dataset', type=str, default='etth1', help='Dataset to use')
+    parser.add_argument('--look_back', type=int, default=96)
+    parser.add_argument('--horizon', type=int, default=96)
+    parser.add_argument('--num_encoder_layers', type=int, default=2)
+    parser.add_argument('--num_decoder_layers', type=int, default=2)
+    parser.add_argument('--num_temporal_decoder_layers', type=int, default=1)
+    parser.add_argument('--hidden_dim', type=int, default=128)
+    parser.add_argument('--decoder_output_dim', type=int, default=16)
+    parser.add_argument('--temporal_decoder_hidden', type=int, default=64)
+    parser.add_argument('--dropout_rate', type=float, default=0.1)
+    parser.add_argument('--learning_rate', type=float, default=0.001)
+    parser.add_argument('--num_epochs', type=int, default=10)
+    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--use_layer_norm', action='store_true')
+    parser.add_argument('--early_stopping_patience', type=int, default=5)
+    parser.add_argument('--early_stopping_delta', type=float, default=0.0)
 
-# Save the trained model
-torch.save(model.state_dict(), 'tide_model.pth')
+    args = parser.parse_args()
+    main(args)

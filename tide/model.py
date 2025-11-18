@@ -1,72 +1,205 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
 
 class ResidualBlock(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, dropout_level=0.1):
-        super(ResidualBlock, self).__init__()
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_dim, output_dim)
-        self.dropout = nn.Dropout(dropout_level)
-        self.layer_norm = nn.LayerNorm(output_dim)
-        self.skip_connection = nn.Linear(input_dim, output_dim)
+    """Residual block."""
 
-    def forward(self, x):
-        identity = self.skip_connection(x)
-        out = self.fc1(x)
-        out = self.relu(out)
-        out = self.fc2(out)
-        out = self.dropout(out)
-        out = self.layer_norm(out + identity)
-        return out
+    def __init__(self,
+                 input_dim: int,
+                 hidden_dim: int,
+                 output_dim: int,
+                 dropout_rate: float = 0.0,
+                 use_layer_norm: bool = False):
+        super().__init__()
+        self._hidden_dim = hidden_dim
+        self._output_dim = output_dim
+        self._dropout_rate = dropout_rate
+        self._use_layer_norm = use_layer_norm
 
-class Encoder(nn.Module):
-    def __init__(self, input_dim, hidden_dim, num_layers, dropout_level=0.1):
-        super(Encoder, self).__init__()
+        self.dense1 = nn.Linear(input_dim, hidden_dim)
+        self.dense2 = nn.Linear(hidden_dim, output_dim)
+        self.dropout = nn.Dropout(dropout_rate)
+        if self._use_layer_norm:
+            self.layer_norm = nn.LayerNorm(output_dim)
+        if input_dim != output_dim:
+            self.projector = nn.Linear(input_dim, output_dim)
+        else:
+            self.projector = None
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Residual block forward pass."""
+        identity = x
+
+        x = self.dense1(x)
+        x = F.relu(x)
+        x = self.dense2(x)
+        x = self.dropout(x)
+
+        if self.projector is not None:
+            identity = self.projector(identity)
+
+        x += identity
+
+        if self._use_layer_norm:
+            x = self.layer_norm(x)
+        return x
+
+class FeatureProjector(nn.Module):
+    """Projects features to a new dimension."""
+
+    def __init__(self, input_dim: int, output_dim: int):
+        super().__init__()
+        self.dense = nn.Linear(input_dim, output_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Projects features to a new dimension."""
+        return self.dense(x)
+
+
+class DenseEncoder(nn.Module):
+    """A dense encoder."""
+
+    def __init__(self,
+                 input_dim: int,
+                 hidden_dim: int,
+                 output_dim: int,
+                 num_layers: int,
+                 dropout_rate: float = 0.0,
+                 use_layer_norm: bool = False):
+        super().__init__()
         layers = []
         for i in range(num_layers):
-            layers.append(ResidualBlock(input_dim if i == 0 else hidden_dim, hidden_dim, hidden_dim, dropout_level))
+            layers.append(
+                ResidualBlock(
+                    input_dim=input_dim if i == 0 else hidden_dim,
+                    hidden_dim=hidden_dim,
+                    output_dim=hidden_dim,
+                    dropout_rate=dropout_rate,
+                    use_layer_norm=use_layer_norm))
         self.encoder = nn.Sequential(*layers)
+        self.projection = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, x):
-        return self.encoder(x)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Dense encoder forward pass."""
+        x = self.encoder(x)
+        return self.projection(x)
 
-class Decoder(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, num_layers, dropout_level=0.1):
-        super(Decoder, self).__init__()
+
+class DenseDecoder(nn.Module):
+    """A dense decoder."""
+
+    def __init__(self,
+                 input_dim: int,
+                 hidden_dim: int,
+                 output_dim: int,
+                 num_layers: int,
+                 dropout_rate: float = 0.0,
+                 use_layer_norm: bool = False):
+        super().__init__()
         layers = []
         for i in range(num_layers):
-            layers.append(ResidualBlock(input_dim if i == 0 else hidden_dim, hidden_dim, hidden_dim, dropout_level))
+            layers.append(
+                ResidualBlock(
+                    input_dim=input_dim if i == 0 else hidden_dim,
+                    hidden_dim=hidden_dim,
+                    output_dim=hidden_dim if i < num_layers - 1 else output_dim,
+                    dropout_rate=dropout_rate,
+                    use_layer_norm=use_layer_norm))
         self.decoder = nn.Sequential(*layers)
-        self.fc = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, x):
-        x = self.decoder(x)
-        return self.fc(x)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Dense decoder forward pass."""
+        return self.decoder(x)
+
 
 class TemporalDecoder(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, dropout_level=0.1):
-        super(TemporalDecoder, self).__init__()
-        self.residual_block = ResidualBlock(input_dim, hidden_dim, output_dim, dropout_level)
+    """A temporal decoder."""
 
-    def forward(self, x):
-        return self.residual_block(x)
+    def __init__(self,
+                 input_dim: int,
+                 hidden_dim: int,
+                 output_dim: int,
+                 num_layers: int,
+                 dropout_rate: float = 0.0,
+                 use_layer_norm: bool = False):
+        super().__init__()
+        layers = []
+        for i in range(num_layers):
+            layers.append(
+                ResidualBlock(
+                    input_dim=input_dim if i == 0 else hidden_dim,
+                    hidden_dim=hidden_dim,
+                    output_dim=hidden_dim,
+                    dropout_rate=dropout_rate,
+                    use_layer_norm=use_layer_norm))
+        self.decoder = nn.Sequential(*layers)
+        self.projection = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Temporal decoder forward pass."""
+        x = self.decoder(x)
+        return self.projection(x)
+
 
 class TiDE(nn.Module):
-    def __init__(self, look_back, horizon, num_encoder_layers, num_decoder_layers, hidden_dim, decoder_output_dim, temporal_decoder_hidden, dropout_level=0.1):
-        super(TiDE, self).__init__()
-        self.encoder = Encoder(look_back, hidden_dim, num_encoder_layers, dropout_level)
-        self.decoder = Decoder(hidden_dim, hidden_dim, horizon * decoder_output_dim, num_decoder_layers, dropout_level)
-        self.temporal_decoder = TemporalDecoder(decoder_output_dim + 1, temporal_decoder_hidden, 1, dropout_level)
-        self.decoder_output_dim = decoder_output_dim
-        self.horizon = horizon
+    """TiDE model."""
 
-    def forward(self, x):
-        # The input x is expected to have shape (batch_size, look_back)
-        batch_size = x.shape[0]
+    def __init__(self,
+                 lookback_len: int,
+                 horizon: int,
+                 num_encoder_layers: int,
+                 num_decoder_layers: int,
+                 hidden_dim: int,
+                 decoder_output_dim: int,
+                 temporal_decoder_hidden: int,
+                 num_temporal_decoder_layers: int,
+                 dropout_rate: float = 0.0,
+                 use_layer_norm: bool = False,
+                 num_time_features: int = 0,
+                 num_past_covariates: int = 0,
+                 num_future_covariates: int = 0):
+        super().__init__()
+        self.lookback_len = lookback_len
+        self.horizon = horizon
+        self.decoder_output_dim = decoder_output_dim
+
+        self.encoder = DenseEncoder(
+            input_dim=lookback_len * (1 + num_past_covariates + num_time_features),
+            hidden_dim=hidden_dim,
+            output_dim=hidden_dim,
+            num_layers=num_encoder_layers,
+            dropout_rate=dropout_rate,
+            use_layer_norm=use_layer_norm)
+
+        self.decoder = DenseDecoder(
+            input_dim=hidden_dim,
+            hidden_dim=hidden_dim,
+            output_dim=horizon * decoder_output_dim,
+            num_layers=num_decoder_layers,
+            dropout_rate=dropout_rate,
+            use_layer_norm=use_layer_norm)
+
+        self.temporal_decoder = TemporalDecoder(
+            input_dim=decoder_output_dim + num_future_covariates,
+            hidden_dim=temporal_decoder_hidden,
+            output_dim=1,
+            num_layers=num_temporal_decoder_layers,
+            dropout_rate=dropout_rate,
+            use_layer_norm=use_layer_norm)
+
+    def forward(self,
+                x_past: torch.Tensor,
+                x_future: torch.Tensor = None) -> torch.Tensor:
+        """TiDE forward pass."""
+        batch_size = x_past.shape[0]
+
+        # Flatten the input
+        x_past_flat = x_past.view(batch_size, -1)
 
         # Encoder
-        encoded = self.encoder(x)
+        encoded = self.encoder(x_past_flat)
 
         # Decoder
         decoded = self.decoder(encoded)
@@ -74,16 +207,12 @@ class TiDE(nn.Module):
         # Reshape for temporal decoder
         decoded = decoded.view(batch_size, self.horizon, self.decoder_output_dim)
 
-        # Since we are not using covariates in this implementation, we will use a placeholder
-        # In a real implementation, future covariates would be concatenated here.
-        # For now, we'll just use the target series itself as a "covariate"
-        # We need to reshape x to match the decoder output
-        # Let's take the last value of the look_back window and repeat it for the horizon
-        last_val = x[:, -1].unsqueeze(1).repeat(1, self.horizon).unsqueeze(2)
-
-        temporal_input = torch.cat([decoded, last_val], dim=2)
+        if x_future is not None:
+            temporal_input = torch.cat([decoded, x_future], dim=-1)
+        else:
+            temporal_input = decoded
 
         # Temporal Decoder
         output = self.temporal_decoder(temporal_input)
 
-        return output.squeeze(2)
+        return output.squeeze(-1)
