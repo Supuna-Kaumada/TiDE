@@ -28,26 +28,19 @@ This implementation has been refactored to align with the original Google Resear
     pip install -r requirements.txt
     ```
 
-2.  **Unzip the datasets:**
+2.  **Download the datasets:**
 
-    Due to file size limitations, you will need to unzip the ETT datasets individually.
-
-    ```bash
-    unzip datasets.zip 'datasets/ETT-small/ETTh1.csv'
-    unzip datasets.zip 'datasets/ETT-small/ETTh2.csv'
-    ```
-
-    *Note: The larger ETTm files are not supported in this implementation due to file size constraints.*
+    Download the datasets from [here](https://github.com/google-research/google-research/tree/master/tide/datasets) and place them in the `datasets` directory, following the structure in `tide/data.py`.
 
 ## Training
 
-To train the TiDE model, run the `train.py` script with your desired hyperparameters:
+To train the TiDE model, run the `train.py` script with your desired dataset and hyperparameters:
 
 ```bash
-python train.py --num_epochs 20 --learning_rate 0.0005
+python train.py --dataset etth1 --num_epochs 20 --learning_rate 0.0005
 ```
 
-This will train the model on the ETTh1 dataset and save the trained model to `tide_model.pth`. For a full list of configurable hyperparameters, see the `argparse` section in `train.py`.
+This will train the model on the ETTh1 dataset and save the trained model to `tide_model.pth`. For a full list of configurable hyperparameters and available datasets, see the `argparse` section in `train.py` and the `DATA_DICT` in `tide/data.py`.
 
 ## Evaluation
 

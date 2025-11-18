@@ -1,26 +1,43 @@
 import torch
 import unittest
 from tide.model import ResidualBlock, TiDE
-from tide.data import load_ett_data
+from tide.data import load_dataset
+import os
 
 class TestData(unittest.TestCase):
-    def test_load_ett_data(self):
+    def setUp(self):
         """
-        Tests that the load_ett_data function correctly loads and processes data.
+        Set up a dummy dataset for testing.
+        """
+        self.dataset_name = 'dummy'
+        self.data_path = 'tests/dummy_data.csv'
+        from tide.data import DATA_DICT
+        DATA_DICT[self.dataset_name] = {
+            'boundaries': [10, 13, 16],
+            'data_path': self.data_path,
+            'freq': 'H',
+        }
+
+    def test_load_dataset(self):
+        """
+        Tests that the load_dataset function correctly loads and processes data.
         """
         (
-            train_target, test_target,
-            train_covariates, test_covariates,
-            train_time, test_time,
+            train_target, val_target, test_target,
+            train_covariates, val_covariates, test_covariates,
+            train_time, val_time, test_time,
             scaler
-        ) = load_ett_data('tests/dummy_data.zip', 'tests/dummy_data.csv', target_column='target')
+        ) = load_dataset(self.dataset_name, target_column='target')
 
-        self.assertEqual(train_target.shape, (12, 1))
-        self.assertEqual(test_target.shape, (4, 1))
-        self.assertEqual(train_covariates.shape, (12, 2))
-        self.assertEqual(test_covariates.shape, (4, 2))
-        self.assertEqual(train_time.shape, (12, 4))
-        self.assertEqual(test_time.shape, (4, 4))
+        self.assertEqual(train_target.shape, (10, 1))
+        self.assertEqual(val_target.shape, (3, 1))
+        self.assertEqual(test_target.shape, (3, 1))
+        self.assertEqual(train_covariates.shape, (10, 2))
+        self.assertEqual(val_covariates.shape, (3, 2))
+        self.assertEqual(test_covariates.shape, (3, 2))
+        self.assertEqual(train_time.shape, (10, 4))
+        self.assertEqual(val_time.shape, (3, 4))
+        self.assertEqual(test_time.shape, (3, 4))
 
 
 class TestResidualBlock(unittest.TestCase):

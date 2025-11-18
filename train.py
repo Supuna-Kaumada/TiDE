@@ -2,24 +2,24 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import CosineAnnealingLR
-from tide.data import load_ett_data, create_sliding_window
+from tide.data import load_dataset, create_sliding_window
 from tide.model import TiDE
 import argparse
 
 def main(args):
     # Load and prepare data
     (
-        train_target, test_target,
-        train_covariates, test_covariates,
-        train_time, test_time,
+        train_target, val_target, test_target,
+        train_covariates, val_covariates, test_covariates,
+        train_time, val_time, test_time,
         scaler
-    ) = load_ett_data(args.zip_file_path, args.file_name, target_column='OT' if 'ETT' in args.dataset else 'target')
+    ) = load_dataset(args.dataset, target_column='OT' if 'ETT' in args.dataset else 'target')
 
     X_past_train, X_future_train, y_train = create_sliding_window(
         train_target, train_covariates, train_time, args.look_back, args.horizon
     )
-    X_past_test, X_future_test, y_test = create_sliding_window(
-        test_target, test_covariates, test_time, args.look_back, args.horizon
+    X_past_val, X_future_val, y_val = create_sliding_window(
+        val_target, val_covariates, val_time, args.look_back, args.horizon
     )
 
     # Instantiate model, loss function, and optimizer
@@ -68,8 +68,8 @@ def main(args):
 
         # Validation
         with torch.no_grad():
-            val_outputs = model(X_past_test, X_future_test)
-            val_loss = criterion(val_outputs, y_test)
+            val_outputs = model(X_past_val, X_future_val)
+            val_loss = criterion(val_outputs, y_val)
             print(f'Validation Loss: {val_loss.item():.4f}')
 
             # Early stopping check
@@ -85,9 +85,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='TiDE Training Script')
-    parser.add_argument('--dataset', type=str, default='ETTh1', help='Dataset to use')
-    parser.add_argument('--zip_file_path', type=str, default='datasets.zip')
-    parser.add_argument('--file_name', type=str, default='datasets/ETT-small/ETTh1.csv')
+    parser.add_argument('--dataset', type=str, default='etth1', help='Dataset to use')
     parser.add_argument('--look_back', type=int, default=96)
     parser.add_argument('--horizon', type=int, default=96)
     parser.add_argument('--num_encoder_layers', type=int, default=2)
