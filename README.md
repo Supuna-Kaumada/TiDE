@@ -2,16 +2,23 @@
 
 This is a PyTorch implementation of the TiDE model from the paper "Long-term Forecasting with TiDE: Time-series Dense Encoder" (arXiv:2304.08424).
 
+This implementation has been refactored to align with the original Google Research implementation [here](https://github.com/google-research/google-research/tree/master/tide).
+
+## Documentation
+
+-   **[ARCHITECTURE.md](ARCHITECTURE.md)**: A detailed explanation of the model architecture.
+-   **[DIFFERENCES.md](DIFFERENCES.md)**: A document outlining the differences between this implementation and the original.
+-   **[MIGRATION.md](MIGRATION.md)**: A guide for migrating from the previous version of this implementation.
+
 ## Project Structure
 
-- `tide/`: This directory contains the core source code for the TiDE model.
-  - `data.py`: Data loading and preprocessing utilities.
-  - `model.py`: The TiDE model architecture.
-  - `baselines.py`: Baseline models for comparison.
-- `train.py`: The training script.
-- `evaluate.py`: The evaluation script.
-- `requirements.txt`: The project dependencies.
-- `datasets.zip`: The ETT datasets.
+-   `tide/`: This directory contains the core source code for the TiDE model.
+    -   `data.py`: Data loading and preprocessing utilities.
+    -   `model.py`: The TiDE model architecture.
+-   `train.py`: The training script.
+-   `evaluate.py`: The evaluation script.
+-   `requirements.txt`: The project dependencies.
+-   `datasets.zip`: The ETT datasets.
 
 ## Setup
 
@@ -34,13 +41,13 @@ This is a PyTorch implementation of the TiDE model from the paper "Long-term For
 
 ## Training
 
-To train the TiDE model, run the `train.py` script:
+To train the TiDE model, run the `train.py` script with your desired hyperparameters:
 
 ```bash
-python train.py
+python train.py --num_epochs 20 --learning_rate 0.0005
 ```
 
-This will train the model on the ETTh1 dataset and save the trained model to `tide_model.pth`.
+This will train the model on the ETTh1 dataset and save the trained model to `tide_model.pth`. For a full list of configurable hyperparameters, see the `argparse` section in `train.py`.
 
 ## Evaluation
 
