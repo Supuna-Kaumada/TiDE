@@ -13,11 +13,8 @@ This document outlines the known differences between this PyTorch implementation
 
 ## Training
 
--   **Optimizer**: The original implementation uses the Adam optimizer with a specific learning rate schedule. This implementation uses the Adam optimizer with a fixed learning rate.
--   **Early Stopping**: The original implementation includes early stopping. This is not yet implemented here.
+-   **Optimizer**: The original implementation uses the Adam optimizer with a specific learning rate schedule. This implementation uses the Adam optimizer with a cosine annealing learning rate scheduler, which is a common choice for this type of model.
 
 ## Intended Future Alignment
 
--   Implement a learning rate scheduler to match the original implementation.
--   Add early stopping to the training loop.
 -   Generalize the data loading pipeline to support a wider range of datasets.

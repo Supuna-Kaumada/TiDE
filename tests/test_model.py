@@ -1,6 +1,27 @@
 import torch
 import unittest
 from tide.model import ResidualBlock, TiDE
+from tide.data import load_ett_data
+
+class TestData(unittest.TestCase):
+    def test_load_ett_data(self):
+        """
+        Tests that the load_ett_data function correctly loads and processes data.
+        """
+        (
+            train_target, test_target,
+            train_covariates, test_covariates,
+            train_time, test_time,
+            scaler
+        ) = load_ett_data('tests/dummy_data.zip', 'tests/dummy_data.csv', target_column='target')
+
+        self.assertEqual(train_target.shape, (12, 1))
+        self.assertEqual(test_target.shape, (4, 1))
+        self.assertEqual(train_covariates.shape, (12, 2))
+        self.assertEqual(test_covariates.shape, (4, 2))
+        self.assertEqual(train_time.shape, (12, 4))
+        self.assertEqual(test_time.shape, (4, 4))
+
 
 class TestResidualBlock(unittest.TestCase):
     def test_forward_pass_shape(self):

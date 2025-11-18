@@ -16,13 +16,14 @@ def get_time_features(dt):
     }
     return pd.DataFrame(features, index=dt)
 
-def load_ett_data(zip_file_path, file_name, test_size=0.2):
+def load_ett_data(zip_file_path, file_name, target_column='OT', test_size=0.2):
     """
-    Loads an ETT dataset from a zip file and prepares it for the TiDE model.
+    Loads a dataset from a zip file and prepares it for the TiDE model.
 
     Args:
         zip_file_path (str): The path to the zip file.
         file_name (str): The name of the CSV file in the zip file.
+        target_column (str): The name of the target column.
         test_size (float): The proportion of the dataset to use for testing.
 
     Returns:
@@ -40,8 +41,8 @@ def load_ett_data(zip_file_path, file_name, test_size=0.2):
     time_features = get_time_features(df.index)
 
     # Target and covariates
-    target_df = df[['OT']]
-    covariate_df = df.drop(columns=['OT'])
+    target_df = df[[target_column]]
+    covariate_df = df.drop(columns=[target_column])
 
     # Train/test split
     train_size = int(len(df) * (1 - test_size))

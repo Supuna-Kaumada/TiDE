@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from tide.data import load_ett_data, create_sliding_window
 from tide.model import TiDE
 import argparse
@@ -12,7 +13,7 @@ def main(args):
         train_covariates, test_covariates,
         train_time, test_time,
         scaler
-    ) = load_ett_data(args.zip_file_path, args.file_name)
+    ) = load_ett_data(args.zip_file_path, args.file_name, target_column='OT' if 'ETT' in args.dataset else 'target')
 
     X_past_train, X_future_train, y_train = create_sliding_window(
         train_target, train_covariates, train_time, args.look_back, args.horizon
@@ -39,6 +40,11 @@ def main(args):
     )
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
+    scheduler = CosineAnnealingLR(optimizer, T_max=args.num_epochs)
+
+    # Early stopping
+    best_val_loss = float('inf')
+    patience_counter = 0
 
     # Training loop
     for epoch in range(args.num_epochs):
@@ -57,6 +63,7 @@ def main(args):
             loss.backward()
             optimizer.step()
 
+        scheduler.step()
         print(f'Epoch [{epoch+1}/{args.num_epochs}], Loss: {loss.item():.4f}')
 
         # Validation
@@ -65,11 +72,20 @@ def main(args):
             val_loss = criterion(val_outputs, y_test)
             print(f'Validation Loss: {val_loss.item():.4f}')
 
-    # Save the trained model
-    torch.save(model.state_dict(), 'tide_model.pth')
+            # Early stopping check
+            if val_loss < best_val_loss - args.early_stopping_delta:
+                best_val_loss = val_loss
+                patience_counter = 0
+                torch.save(model.state_dict(), 'tide_model.pth')
+            else:
+                patience_counter += 1
+                if patience_counter >= args.early_stopping_patience:
+                    print("Early stopping triggered")
+                    break
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='TiDE Training Script')
+    parser.add_argument('--dataset', type=str, default='ETTh1', help='Dataset to use')
     parser.add_argument('--zip_file_path', type=str, default='datasets.zip')
     parser.add_argument('--file_name', type=str, default='datasets/ETT-small/ETTh1.csv')
     parser.add_argument('--look_back', type=int, default=96)
@@ -85,6 +101,8 @@ if __name__ == '__main__':
     parser.add_argument('--num_epochs', type=int, default=10)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--use_layer_norm', action='store_true')
+    parser.add_argument('--early_stopping_patience', type=int, default=5)
+    parser.add_argument('--early_stopping_delta', type=float, default=0.0)
 
     args = parser.parse_args()
     main(args)
